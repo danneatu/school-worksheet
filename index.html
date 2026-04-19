@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kästchen-Wörter</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="controls">
+        <label for="titleInput">Seiten Überschrift</label>
+        <div class="input-row title-row">
+          <input id="titleInput" type="text" autocomplete="off" placeholder="Seiten Überschrift eingeben" />
+        </div>
+
+        <label for="wordInput">Wort</label>
+        <div class="input-row">
+          <input id="wordInput" type="text" autocomplete="off" placeholder="Wort eingeben" />
+          <button id="addBtn" type="button">Hinzufügen</button>
+          <button id="clearBtn" type="button">Alle löschen</button>
+          <button id="exportBtn" type="button">PDF exportieren</button>
+        </div>
+        <div id="wordList" class="word-list"></div>
+      </section>
+
+      <section class="preview-wrap">
+        <div id="page1" class="page"></div>
+        <div id="page2" class="page"></div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
