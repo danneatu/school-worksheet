@@ -48,6 +48,27 @@ body {
   margin-bottom: 14px;
 }
 
+.scale-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.scale-row label {
+  font-weight: 500;
+}
+
+#scaleInput {
+  min-width: 220px;
+}
+
+#scaleValue {
+  min-width: 48px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 input {
   min-width: 220px;
   padding: 10px 12px;

@@ -28,18 +28,38 @@ const DIM = {
 const state = {
   words: [],
   title: "",
+  wordScale: 1,
 };
 
 const STORAGE_KEY = "kaestchen_woerter_words";
 const STORAGE_KEY_TITLE = "kaestchen_woerter_title";
+const STORAGE_KEY_SCALE = "kaestchen_woerter_scale_percent";
+const MIN_WORD_SCALE_PERCENT = 50;
+const MAX_WORD_SCALE_PERCENT = 100;
 
 const titleInput = document.getElementById("titleInput");
 const wordInput = document.getElementById("wordInput");
 const addBtn = document.getElementById("addBtn");
 const clearBtn = document.getElementById("clearBtn");
 const exportBtn = document.getElementById("exportBtn");
+const scaleInput = document.getElementById("scaleInput");
+const scaleValue = document.getElementById("scaleValue");
 const wordList = document.getElementById("wordList");
 const pageEls = [document.getElementById("page1"), document.getElementById("page2")];
+
+function clampScalePercent(value) {
+  if (!Number.isFinite(value)) return MAX_WORD_SCALE_PERCENT;
+  return Math.min(MAX_WORD_SCALE_PERCENT, Math.max(MIN_WORD_SCALE_PERCENT, Math.round(value)));
+}
+
+function getCurrentScalePercent() {
+  return clampScalePercent(state.wordScale * 100);
+}
+
+function updateScaleLabel() {
+  if (!scaleValue) return;
+  scaleValue.textContent = `${getCurrentScalePercent()}%`;
+}
 
 function getPreviewScale() {
   const pageWidth = pageEls[0]?.clientWidth || DIM.pageWidth;
@@ -53,6 +73,7 @@ function saveWords() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.words));
     localStorage.setItem(STORAGE_KEY_TITLE, state.title);
+    localStorage.setItem(STORAGE_KEY_SCALE, String(getCurrentScalePercent()));
   } catch {
   }
 }
@@ -73,6 +94,12 @@ function loadWords() {
     state.title = rawTitle ? String(rawTitle).trim() : "";
     if (titleInput) {
       titleInput.value = state.title;
+    }
+
+    const rawScale = localStorage.getItem(STORAGE_KEY_SCALE);
+    const parsedScale = Number(rawScale);
+    if (Number.isFinite(parsedScale)) {
+      state.wordScale = clampScalePercent(parsedScale) / 100;
     }
   } catch {
   }
@@ -108,11 +135,16 @@ function getDescenderHeight(char) {
   return char.toLowerCase() === "g" ? DIM.gDescHeight : DIM.descHeight;
 }
 
-function getVerticalModel() {
-  const mainTop = DIM.dotHeight;
-  const lowTop = mainTop + (DIM.highHeight - DIM.lowHeight);
-  const descExtra = Math.max(0, DIM.gDescHeight - DIM.lowHeight);
-  const wordHeight = mainTop + DIM.highHeight + descExtra;
+function getVerticalModel(wordScale = 1) {
+  const dotHeight = DIM.dotHeight * wordScale;
+  const highHeight = DIM.highHeight * wordScale;
+  const lowHeight = DIM.lowHeight * wordScale;
+  const gDescHeight = DIM.gDescHeight * wordScale;
+
+  const mainTop = dotHeight;
+  const lowTop = mainTop + (highHeight - lowHeight);
+  const descExtra = Math.max(0, gDescHeight - lowHeight);
+  const wordHeight = mainTop + highHeight + descExtra;
 
   return {
     mainTop,
@@ -121,19 +153,23 @@ function getVerticalModel() {
   };
 }
 
-function getWordMetrics(word) {
+function getWordMetrics(word, wordScale = 1) {
   const letterCount = word.length;
-  const baseWidth = letterCount * DIM.letterWidth + Math.max(0, letterCount - 1) * DIM.letterGap;
-  const vm = getVerticalModel();
+  const letterWidth = DIM.letterWidth * wordScale;
+  const letterGap = DIM.letterGap * wordScale;
+  const baseWidth = letterCount * letterWidth + Math.max(0, letterCount - 1) * letterGap;
+  const vm = getVerticalModel(wordScale);
   return {
     width: baseWidth,
     height: vm.wordHeight,
   };
 }
 
-function layoutWords(words, titleText = "") {
+function layoutWords(words, titleText = "", wordScale = 1) {
   const hasTitle = titleText.trim().length > 0;
   const titleBlockHeight = hasTitle ? DIM.titleFontSize + DIM.titleGap : 0;
+  const wordGap = DIM.wordGap * wordScale;
+  const rowGap = DIM.rowGap * wordScale;
   const placed = [];
   let page = 0;
   let x = DIM.margin;
@@ -141,13 +177,13 @@ function layoutWords(words, titleText = "") {
   let rowHeight = 0;
 
   for (const word of words) {
-    const metrics = getWordMetrics(word);
+    const metrics = getWordMetrics(word, wordScale);
     const neededW = metrics.width;
     const neededH = metrics.height;
 
     if (x + neededW > DIM.margin + usableWidth) {
       x = DIM.margin;
-      y += rowHeight + DIM.rowGap;
+      y += rowHeight + rowGap;
       rowHeight = 0;
     }
 
@@ -160,7 +196,7 @@ function layoutWords(words, titleText = "") {
 
     placed.push({ word, page, x, y, metrics });
 
-    x += neededW + DIM.wordGap;
+    x += neededW + wordGap;
     rowHeight = Math.max(rowHeight, neededH);
   }
 
@@ -171,14 +207,26 @@ function createSvgEl(tag) {
   return document.createElementNS("http://www.w3.org/2000/svg", tag);
 }
 
-function renderWordSvg(word, metrics, scale = 1) {
+function renderWordSvg(word, metrics, scale = 1, wordScale = 1) {
+  const letterWidth = DIM.letterWidth * wordScale;
+  const lowHeight = DIM.lowHeight * wordScale;
+  const highHeight = DIM.highHeight * wordScale;
+  const descHeight = DIM.descHeight * wordScale;
+  const gDescHeight = DIM.gDescHeight * wordScale;
+  const dotHeight = DIM.dotHeight * wordScale;
+  const dotGap = DIM.dotGap * wordScale;
+  const dotDoubleGap = DIM.dotDoubleGap * wordScale;
+  const stroke = DIM.stroke * wordScale;
+  const radius = DIM.radius * wordScale;
+  const letterGap = DIM.letterGap * wordScale;
+
   const svg = createSvgEl("svg");
   svg.classList.add("word-svg");
-  const strokePad = DIM.stroke / 2 + 1;
+  const strokePad = stroke / 2 + 1;
   svg.setAttribute("viewBox", `0 0 ${metrics.width + strokePad * 2} ${metrics.height + strokePad * 2}`);
   svg.setAttribute("width", String(metrics.width * scale));
   svg.setAttribute("height", String(metrics.height * scale));
-  const vm = getVerticalModel();
+  const vm = getVerticalModel(wordScale);
 
   let cursorX = 0;
   for (const char of word) {
@@ -186,67 +234,67 @@ function renderWordSvg(word, metrics, scale = 1) {
     const isDot = hasDot(char);
     const isDoubleDot = hasDoubleDot(char);
 
-    let rectHeight = DIM.lowHeight;
+    let rectHeight = lowHeight;
     let rectY = vm.lowTop;
 
     if (isTallDescender(char)) {
-      rectHeight = (DIM.highHeight - DIM.lowHeight) + DIM.descHeight;
+      rectHeight = (highHeight - lowHeight) + descHeight;
       rectY = vm.mainTop;
     } else if (type === "ascender") {
-      rectHeight = DIM.highHeight;
+      rectHeight = highHeight;
       rectY = vm.mainTop;
     } else if (type === "descender") {
-      rectHeight = getDescenderHeight(char);
+      rectHeight = char.toLowerCase() === "g" ? gDescHeight : descHeight;
       rectY = vm.lowTop;
     }
 
     const rect = createSvgEl("rect");
     rect.setAttribute("x", String(cursorX + strokePad));
     rect.setAttribute("y", String(rectY + strokePad));
-    rect.setAttribute("width", String(DIM.letterWidth));
+    rect.setAttribute("width", String(letterWidth));
     rect.setAttribute("height", String(rectHeight));
-    rect.setAttribute("rx", String(DIM.radius));
-    rect.setAttribute("ry", String(DIM.radius));
+    rect.setAttribute("rx", String(radius));
+    rect.setAttribute("ry", String(radius));
     rect.setAttribute("fill", "white");
     rect.setAttribute("stroke", "black");
-    rect.setAttribute("stroke-width", String(DIM.stroke));
+    rect.setAttribute("stroke-width", String(stroke));
     svg.appendChild(rect);
 
     if (isDot) {
-      const dotY = rectY - DIM.dotHeight - DIM.dotGap;
+      const dotY = rectY - dotHeight - dotGap;
       const dot = createSvgEl("rect");
       dot.setAttribute("x", String(cursorX + strokePad));
       dot.setAttribute("y", String(dotY + strokePad));
-      dot.setAttribute("width", String(DIM.letterWidth));
-      dot.setAttribute("height", String(DIM.dotHeight));
-      dot.setAttribute("rx", String(DIM.radius));
-      dot.setAttribute("ry", String(DIM.radius));
+      dot.setAttribute("width", String(letterWidth));
+      dot.setAttribute("height", String(dotHeight));
+      dot.setAttribute("rx", String(radius));
+      dot.setAttribute("ry", String(radius));
       dot.setAttribute("fill", "white");
       dot.setAttribute("stroke", "black");
-      dot.setAttribute("stroke-width", String(DIM.stroke));
+      dot.setAttribute("stroke-width", String(stroke));
       svg.appendChild(dot);
     }
 
     if (isDoubleDot) {
-      const dotY = rectY - DIM.dotHeight - DIM.dotGap;
-      const dotW = (DIM.letterWidth - DIM.dotDoubleGap) / 2;
+      const dotY = rectY - dotHeight - dotGap;
+      const dotW = (letterWidth - dotDoubleGap) / 2;
       for (let d = 0; d < 2; d++) {
-        const dotX = cursorX + d * (dotW + DIM.dotDoubleGap);
+        const dotX = cursorX + d * (dotW + dotDoubleGap);
         const dot = createSvgEl("rect");
         dot.setAttribute("x", String(dotX + strokePad));
         dot.setAttribute("y", String(dotY + strokePad));
         dot.setAttribute("width", String(dotW));
-        dot.setAttribute("height", String(DIM.dotHeight));
-        dot.setAttribute("rx", String(DIM.radius));
-        dot.setAttribute("ry", String(DIM.radius));
+        dot.setAttribute("height", String(dotHeight));
+        dot.setAttribute("rx", String(radius));
+        dot.setAttribute("ry", String(radius));
         dot.setAttribute("fill", "white");
         dot.setAttribute("stroke", "black");
-        dot.setAttribute("stroke-width", String(DIM.stroke));
+        dot.setAttribute("stroke-width", String(stroke));
         svg.appendChild(dot);
       }
     }
 
-    cursorX += DIM.letterWidth + DIM.letterGap;
+    cursorX += letterWidth + letterGap;
   }
 
   return svg;
@@ -298,7 +346,7 @@ function renderPreviewTitle(scale) {
 function renderPages() {
   clearPages();
 
-  const layout = layoutWords(state.words, state.title);
+  const layout = layoutWords(state.words, state.title, state.wordScale);
   const scale = getPreviewScale();
   const hasSecondPreviewPage = layout.some((entry) => entry.page === 1);
   pageEls[1].style.display = hasSecondPreviewPage ? "block" : "none";
@@ -306,7 +354,7 @@ function renderPages() {
 
   layout.forEach((entry) => {
     if (entry.page > 1) return;
-    const svg = renderWordSvg(entry.word, entry.metrics, scale);
+    const svg = renderWordSvg(entry.word, entry.metrics, scale, state.wordScale);
     svg.style.left = `${entry.x * scale}px`;
     svg.style.top = `${entry.y * scale}px`;
     pageEls[entry.page].appendChild(svg);
@@ -327,9 +375,19 @@ function addCurrentWord() {
   render();
 }
 
-function drawWordPdf(pdf, entry) {
+function drawWordPdf(pdf, entry, wordScale = 1) {
   const { word, x, y } = entry;
-  const vm = getVerticalModel();
+  const vm = getVerticalModel(wordScale);
+  const letterWidth = DIM.letterWidth * wordScale;
+  const lowHeight = DIM.lowHeight * wordScale;
+  const highHeight = DIM.highHeight * wordScale;
+  const descHeight = DIM.descHeight * wordScale;
+  const gDescHeight = DIM.gDescHeight * wordScale;
+  const dotHeight = DIM.dotHeight * wordScale;
+  const dotGap = DIM.dotGap * wordScale;
+  const dotDoubleGap = DIM.dotDoubleGap * wordScale;
+  const radius = DIM.radius * wordScale;
+  const letterGap = DIM.letterGap * wordScale;
   let cursorX = x;
 
   for (const char of word) {
@@ -337,37 +395,37 @@ function drawWordPdf(pdf, entry) {
     const isDot = hasDot(char);
     const isDoubleDot = hasDoubleDot(char);
 
-    let rectHeight = DIM.lowHeight;
+    let rectHeight = lowHeight;
     let rectY = y + vm.lowTop;
 
     if (isTallDescender(char)) {
-      rectHeight = (DIM.highHeight - DIM.lowHeight) + DIM.descHeight;
+      rectHeight = (highHeight - lowHeight) + descHeight;
       rectY = y + vm.mainTop;
     } else if (type === "ascender") {
-      rectHeight = DIM.highHeight;
+      rectHeight = highHeight;
       rectY = y + vm.mainTop;
     } else if (type === "descender") {
-      rectHeight = getDescenderHeight(char);
+      rectHeight = char.toLowerCase() === "g" ? gDescHeight : descHeight;
       rectY = y + vm.lowTop;
     }
 
-    pdf.roundedRect(cursorX, rectY, DIM.letterWidth, rectHeight, DIM.radius, DIM.radius, "S");
+    pdf.roundedRect(cursorX, rectY, letterWidth, rectHeight, radius, radius, "S");
 
     if (isDot) {
-      const dotY = rectY - DIM.dotHeight - DIM.dotGap;
-      pdf.roundedRect(cursorX, dotY, DIM.letterWidth, DIM.dotHeight, DIM.radius, DIM.radius, "S");
+      const dotY = rectY - dotHeight - dotGap;
+      pdf.roundedRect(cursorX, dotY, letterWidth, dotHeight, radius, radius, "S");
     }
 
     if (isDoubleDot) {
-      const dotY = rectY - DIM.dotHeight - DIM.dotGap;
-      const dotW = (DIM.letterWidth - DIM.dotDoubleGap) / 2;
+      const dotY = rectY - dotHeight - dotGap;
+      const dotW = (letterWidth - dotDoubleGap) / 2;
       for (let d = 0; d < 2; d++) {
-        const dotX = cursorX + d * (dotW + DIM.dotDoubleGap);
-        pdf.roundedRect(dotX, dotY, dotW, DIM.dotHeight, DIM.radius, DIM.radius, "S");
+        const dotX = cursorX + d * (dotW + dotDoubleGap);
+        pdf.roundedRect(dotX, dotY, dotW, dotHeight, radius, radius, "S");
       }
     }
 
-    cursorX += DIM.letterWidth + DIM.letterGap;
+    cursorX += letterWidth + letterGap;
   }
 }
 
@@ -395,7 +453,7 @@ async function exportPdf() {
   pdf.setDrawColor(0, 0, 0);
   pdf.setLineWidth(DIM.stroke);
 
-  const layout = layoutWords(state.words, state.title);
+  const layout = layoutWords(state.words, state.title, state.wordScale);
 
   const pagesWithEntries = [...new Set(layout.map((entry) => entry.page))]
     .sort((a, b) => a - b)
@@ -424,7 +482,7 @@ async function exportPdf() {
       pdf.text(state.title, DIM.pageWidth / 2, DIM.margin + DIM.titleFontSize, { align: "center" });
     }
     entries.forEach((entry) => {
-      drawWordPdf(pdf, entry);
+      drawWordPdf(pdf, entry, state.wordScale);
     });
   });
 
@@ -442,11 +500,23 @@ function initializePreviewPageVisibility() {
   pageEls[1].style.display = "none";
 }
 
+function initializeScaleControl() {
+  if (!scaleInput) return;
+  scaleInput.value = String(getCurrentScalePercent());
+  updateScaleLabel();
+}
+
 addBtn.addEventListener("click", addCurrentWord);
 titleInput.addEventListener("input", () => {
   state.title = titleInput.value.trim();
   saveWords();
   render();
+});
+scaleInput.addEventListener("input", () => {
+  state.wordScale = clampScalePercent(Number(scaleInput.value)) / 100;
+  updateScaleLabel();
+  saveWords();
+  renderPages();
 });
 clearBtn.addEventListener("click", () => {
   state.words = [];
@@ -466,4 +536,5 @@ window.addEventListener("resize", renderPages);
 
 initializePreviewPageVisibility();
 loadWords();
+initializeScaleControl();
 render();
